@@ -5,10 +5,10 @@ import {
 } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { RegisterDto } from './dto/register.dto';
-
 import * as bcryptjs from 'bcryptjs';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class AuthService {
@@ -18,16 +18,21 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const user = await this.usersService.findOneByEmail(registerDto.email);
+    const userExists = await this.usersService.findOneByEmail(
+      registerDto.email,
+    );
 
-    if (user) {
+    if (userExists) {
       throw new BadRequestException('User already exists');
     }
 
-    await this.usersService.create({
+    const newUser = {
       ...registerDto,
       password: await bcryptjs.hash(registerDto.password, 10),
-    });
+      role: [Role.USER], // Asignar un rol predeterminado
+    };
+
+    await this.usersService.create(newUser);
 
     return {
       message: 'User created successfully',
@@ -35,7 +40,9 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const user = await this.usersService.findOneByEmail(loginDto.email);
+    const user = await this.usersService.findByEmailWithPassword(
+      loginDto.email,
+    );
     if (!user) {
       throw new UnauthorizedException('Email is wrong');
     }
@@ -49,7 +56,7 @@ export class AuthService {
       throw new UnauthorizedException('Password is wrong');
     }
 
-    const payload = { email: user.email, role: user.role };
+    const payload = { email: user.email, roles: user.role };
     const token = await this.jwtService.signAsync(payload);
 
     return {
@@ -58,7 +65,7 @@ export class AuthService {
     };
   }
 
-  async profile({ email, role }: { email: string; role: string }) {
+  async profile({ email, roles }: { email: string; roles: string }) {
     return await this.usersService.findOneByEmail(email);
   }
 }
